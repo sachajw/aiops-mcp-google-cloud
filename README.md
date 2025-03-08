@@ -90,7 +90,3 @@ This server supports two methods of authentication with Google Cloud:
 2. **Environment Variables**: Set `GOOGLE_CLIENT_EMAIL` and `GOOGLE_PRIVATE_KEY` environment variables directly.
 
 The server will also use the `GOOGLE_CLOUD_PROJECT` environment variable if set, otherwise it will attempt to determine the project ID from the authentication credentials.
-
-## License
-
-MIT

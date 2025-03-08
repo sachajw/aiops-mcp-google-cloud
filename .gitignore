@@ -1,3 +1,6 @@
+# Rules
+.windsurfrules
+
 # Dependencies
 node_modules/
 .pnpm-store/
