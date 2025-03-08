@@ -22,9 +22,36 @@ cd google-cloud-mcp
 # Install dependencies
 pnpm install
 
+# Build
+pnpm build
+
 # Copy and configure environment variables
 cp .env.example .env
 # Edit .env with your Google Cloud settings
+```
+
+Authenticate to Google Cloud:
+
+```bash
+gcloud auth application-default login
+```
+
+Configure the `mcpServers` in your client:
+
+```json
+{
+  "mcpServers": {
+      "google-cloud-mcp": {
+          "command": "node",
+          "args": [
+              "/Users/foo/Downloads/google-cloud-mcp/dist/index.js"
+          ],
+          "env": {
+              "GOOGLE_APPLICATION_CREDENTIALS": "/Users/foo/.config/gcloud/application_default_credentials.json",
+          }
+      }
+  }
+}
 ```
 
 ## Usage
@@ -42,7 +69,11 @@ pnpm start
 ### Development mode
 
 ```bash
-pnpm dev
+# Build the project
+pnpm build
+
+# Start the server and inspector
+npx -y @modelcontextprotocol/inspector node dist/index.js
 ```
 
 ## Services
