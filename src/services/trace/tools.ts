@@ -37,7 +37,14 @@ export async function registerTraceTools(server: McpServer): Promise<void> {
         }
         
         // Initialize Google Auth client
-        const auth = await initGoogleAuth();
+        const auth = await initGoogleAuth(true);
+        if (!auth) {
+          throw new GcpMcpError(
+            'Google Cloud authentication not available. Please configure authentication to access trace data.',
+            'UNAUTHENTICATED',
+            401
+          );
+        }
         const client = await auth.getClient();
         const token = await client.getAccessToken();
         
@@ -280,7 +287,14 @@ export async function registerTraceTools(server: McpServer): Promise<void> {
         }
         
         // Initialize Google Auth client
-        const auth = await initGoogleAuth();
+        const auth = await initGoogleAuth(true);
+        if (!auth) {
+          throw new GcpMcpError(
+            'Google Cloud authentication not available. Please configure authentication to access trace data.',
+            'UNAUTHENTICATED',
+            401
+          );
+        }
         const client = await auth.getClient();
         const token = await client.getAccessToken();
         
@@ -630,7 +644,14 @@ export async function registerTraceTools(server: McpServer): Promise<void> {
           }
           
           // Initialize Google Auth client
-          const auth = await initGoogleAuth();
+          const auth = await initGoogleAuth(true);
+          if (!auth) {
+            throw new GcpMcpError(
+              'Google Cloud authentication not available. Please configure authentication to access trace data.',
+              'UNAUTHENTICATED',
+              401
+            );
+          }
           const client = await auth.getClient();
           const token = await client.getAccessToken();
           
@@ -928,7 +949,14 @@ export async function registerTraceTools(server: McpServer): Promise<void> {
         }
         
         // Initialize Google Auth client
-        const auth = await initGoogleAuth();
+        const auth = await initGoogleAuth(true);
+        if (!auth) {
+          throw new GcpMcpError(
+            'Google Cloud authentication not available. Please configure authentication to access trace data.',
+            'UNAUTHENTICATED',
+            401
+          );
+        }
         const client = await auth.getClient();
         const token = await client.getAccessToken();
         

@@ -26,8 +26,11 @@ dotenv.config();
  */
 async function main(): Promise<void> {
   try {
-    // Initialise Google Cloud authentication
-    await initGoogleAuth();
+    // Initialize Google Cloud authentication in non-blocking mode
+    // This allows the server to start even if credentials aren't available yet
+    initGoogleAuth(false).catch(() => {
+      // Silently continue if auth fails - we'll handle this in each tool/resource
+    });
 
     // Create the MCP server
     const server = new McpServer({

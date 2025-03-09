@@ -116,8 +116,55 @@ Analyse distributed traces from Google Cloud Trace:
 
 This server supports two methods of authentication with Google Cloud:
 
-1. **Service Account Key File**: Set the `GOOGLE_APPLICATION_CREDENTIALS` environment variable to the path of your service account key file.
+1. **Service Account Key File** (Recommended): Set the `GOOGLE_APPLICATION_CREDENTIALS` environment variable to the path of your service account key file. This is the standard Google Cloud authentication method.
 
-2. **Environment Variables**: Set `GOOGLE_CLIENT_EMAIL` and `GOOGLE_PRIVATE_KEY` environment variables directly.
+2. **Environment Variables**: Set `GOOGLE_CLIENT_EMAIL` and `GOOGLE_PRIVATE_KEY` environment variables directly. This is useful for environments where storing a key file is not practical.
 
 The server will also use the `GOOGLE_CLOUD_PROJECT` environment variable if set, otherwise it will attempt to determine the project ID from the authentication credentials.
+
+### Lazy Authentication
+
+The server implements lazy loading for authentication, which means:
+
+- The server will start successfully even if Google Cloud credentials are not available
+- Authentication will only be attempted when a tool or resource requiring Google Cloud access is used
+- Clear error messages will be provided if authentication fails when a Google Cloud operation is attempted
+
+This makes the server more flexible for deployment in environments where credentials might not be immediately available.
+
+## Deployment
+
+### Smithery Deployment
+
+This server includes configuration for deployment with Smithery. The included `smithery.yaml` file supports both authentication methods:
+
+```yaml
+# Example Smithery configuration
+startCommand:
+  type: stdio
+  configSchema:
+    # Configuration options
+    properties:
+      projectId:
+        type: string
+        description: "Google Cloud Project ID (optional)"
+      credentials:
+        # Two authentication options
+        oneOf:
+          # Option 1: Using environment variables
+          - properties:
+              clientEmail:
+                type: string
+              privateKey:
+                type: string
+          # Option 2: Using a key file (standard approach)
+          - properties:
+              keyFilePath:
+                type: string
+```
+
+To deploy with Smithery:
+
+1. Build the Docker image using the included Dockerfile
+2. Configure authentication in your Smithery configuration
+3. Deploy the server using Smithery's deployment tools
