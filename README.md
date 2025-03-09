@@ -76,6 +76,87 @@ pnpm build
 npx -y @modelcontextprotocol/inspector node dist/index.js
 ```
 
+### Using with Smithery
+
+This server can be deployed and used with Smithery. The server implements lazy loading of authentication, which means it will start immediately and defer authentication until it's actually needed. Authentication is still required for operation, but this approach prevents timeouts during server initialization.
+
+#### Smithery Configuration
+
+You can configure the server in your Smithery configuration with the following options:
+
+```json
+{
+  "projectId": "your-google-cloud-project-id",  // Optional
+  "debug": true,  // Enable debug logging
+  "lazyAuth": true,  // Enable lazy loading of authentication (recommended for Smithery)
+  "credentials": {
+    "keyFilePath": "/path/to/your/credentials.json"  // Method 1: Path to credentials file
+  }
+}
+```
+
+Alternatively, you can provide credentials as environment variables:
+
+```json
+{
+  "projectId": "your-google-cloud-project-id",
+  "credentials": {
+    "clientEmail": "your-service-account@project.iam.gserviceaccount.com",
+    "privateKey": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+  }
+}
+```
+
+#### Claude Desktop Integration
+
+To use this server with Claude Desktop, add the following to your Claude Desktop configuration:
+
+```json
+{
+  "mcpServers": {
+    "@krzko-google-cloud-mcp": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@smithery/cli@latest",
+        "run",
+        "@krzko/google-cloud-mcp",
+        "--config",
+        "{\"projectId\":\"your-project-id\",\"debug\":true,\"lazyAuth\":true,\"credentials\":\"/path/to/credentials.json\"}"
+      ]
+    }
+  }
+}
+```
+
+**Note:** For Claude Desktop, you can pass the credentials path directly as a string.
+
+## Troubleshooting
+
+### Server Timeout Issues
+
+If you encounter timeout issues when running the server with Smithery, try the following:
+
+1. Enable debug logging by setting `debug: true` in your configuration
+2. Ensure `lazyAuth: true` is set to defer authentication until it's actually needed
+3. Ensure your credentials file is accessible and valid
+4. Check the logs for any error messages
+
+**Important**: Authentication is still required for operation, but with lazy loading enabled, the server will start immediately and authenticate when needed rather than during initialization.
+
+### Authentication Issues
+
+The server supports two methods of authentication:
+
+1. **Service Account Key File**: Set `GOOGLE_APPLICATION_CREDENTIALS` environment variable to the path of your service account key file
+2. **Environment Variables**: Set `GOOGLE_CLIENT_EMAIL` and `GOOGLE_PRIVATE_KEY` environment variables
+
+If you're having authentication issues, make sure:
+
+- Your service account has the necessary permissions
+- The key file is properly formatted and accessible
+- Environment variables are correctly set
+
 ## Services
 
 ### Google Cloud Logging

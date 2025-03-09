@@ -7,7 +7,8 @@ import path from 'path';
 import { configManager } from './config.js';
 
 // Global auth client that can be reused
-let authClient: GoogleAuth | null = null;
+// Exported to allow checking auth status from other modules
+export let authClient: GoogleAuth | null = null;
 
 /**
  * Initialises Google Cloud authentication using either:
@@ -17,61 +18,73 @@ let authClient: GoogleAuth | null = null;
  * This function supports lazy loading - it won't fail if credentials aren't available yet,
  * allowing the server to start without authentication and defer it until needed.
  * 
+ * Authentication is required for operation but can be lazy-loaded when first needed rather than
+ * at startup, which helps prevent timeouts with Smithery.
+ * 
  * @param requireAuth If true, will throw an error if authentication fails. If false, will return null.
  * @returns Promise resolving to the authenticated GoogleAuth client or null if authentication isn't available
  */
 export async function initGoogleAuth(requireAuth = false): Promise<GoogleAuth | null> {
-  if (authClient) {
-    return authClient;
+  // Check if we're in lazy loading mode
+  const lazyAuth = process.env.LAZY_AUTH !== 'false'; // Default to true if not set
+  
+  // If we're in lazy loading mode and not explicitly requiring auth, defer authentication
+  if (lazyAuth && !requireAuth) {
+    console.log('Lazy authentication enabled - deferring authentication until needed');
   }
+  try {
+    // If we already have an auth client, return it
+    if (authClient) {
+      return authClient;
+    }
 
-  // Check if we need to create a temporary credentials file
-  if (process.env.GOOGLE_CLIENT_EMAIL && process.env.GOOGLE_PRIVATE_KEY) {
-    try {
-      const credentials = {
-        type: 'service_account',
-        project_id: process.env.GOOGLE_CLOUD_PROJECT,
-        private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-        client_email: process.env.GOOGLE_CLIENT_EMAIL,
-        client_id: '',
-        auth_uri: 'https://accounts.google.com/o/oauth2/auth',
-        token_uri: 'https://oauth2.googleapis.com/token',
-        auth_provider_x509_cert_url: 'https://www.googleapis.com/oauth2/v1/certs',
-        client_x509_cert_url: `https://www.googleapis.com/robot/v1/metadata/x509/${encodeURIComponent(
-          process.env.GOOGLE_CLIENT_EMAIL
-        )}`
-      };
+    // Check if we need to create a temporary credentials file from environment variables
+    if (process.env.GOOGLE_CLIENT_EMAIL && process.env.GOOGLE_PRIVATE_KEY) {
+      try {
+        // Create a temporary credentials file without blocking server startup
+        const tempDir = path.join(process.cwd(), '.temp');
+        if (!fs.existsSync(tempDir)) {
+          fs.mkdirSync(tempDir, { recursive: true });
+        }
 
-      // Create a temporary credentials file
-      const tempDir = path.join(process.cwd(), '.temp');
-      if (!fs.existsSync(tempDir)) {
-        fs.mkdirSync(tempDir, { recursive: true });
+        const credentials = {
+          type: 'service_account',
+          project_id: process.env.GOOGLE_CLOUD_PROJECT || '',
+          private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+          client_email: process.env.GOOGLE_CLIENT_EMAIL,
+          client_id: '',
+          auth_uri: 'https://accounts.google.com/o/oauth2/auth',
+          token_uri: 'https://oauth2.googleapis.com/token',
+          auth_provider_x509_cert_url: 'https://www.googleapis.com/oauth2/v1/certs',
+          client_x509_cert_url: `https://www.googleapis.com/robot/v1/metadata/x509/${encodeURIComponent(
+            process.env.GOOGLE_CLIENT_EMAIL
+          )}`
+        };
+
+        const tempCredentialsPath = path.join(tempDir, 'temp-credentials.json');
+        fs.writeFileSync(tempCredentialsPath, JSON.stringify(credentials));
+        process.env.GOOGLE_APPLICATION_CREDENTIALS = tempCredentialsPath;
+      } catch (error) {
+        console.error(`Warning: Failed to create temporary credentials file: ${error instanceof Error ? error.message : String(error)}`);
+        if (requireAuth) {
+          throw new Error(`Failed to create temporary credentials file: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        return null;
       }
+    }
 
-      const tempCredentialsPath = path.join(tempDir, 'temp-credentials.json');
-      fs.writeFileSync(tempCredentialsPath, JSON.stringify(credentials));
-      process.env.GOOGLE_APPLICATION_CREDENTIALS = tempCredentialsPath;
-    } catch (error) {
+    // Check if GOOGLE_APPLICATION_CREDENTIALS is set
+    if (!process.env.GOOGLE_APPLICATION_CREDENTIALS) {
       if (requireAuth) {
-        throw new Error(`Failed to create temporary credentials file: ${error instanceof Error ? error.message : String(error)}`);
+        throw new Error(
+          'Google Cloud authentication not configured. Please set GOOGLE_APPLICATION_CREDENTIALS ' +
+          'or both GOOGLE_CLIENT_EMAIL and GOOGLE_PRIVATE_KEY environment variables.'
+        );
       }
       return null;
     }
-  }
 
-  // Check if GOOGLE_APPLICATION_CREDENTIALS is set
-  if (!process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    if (requireAuth) {
-      throw new Error(
-        'Google Cloud authentication not configured. Please set GOOGLE_APPLICATION_CREDENTIALS ' +
-        'or both GOOGLE_CLIENT_EMAIL and GOOGLE_PRIVATE_KEY environment variables.'
-      );
-    }
-    return null;
-  }
-
-  try {
-    // Create and cache the auth client
+    // Create the auth client without verifying it immediately
     authClient = new GoogleAuth({
       scopes: [
         'https://www.googleapis.com/auth/cloud-platform',
@@ -81,19 +94,25 @@ export async function initGoogleAuth(requireAuth = false): Promise<GoogleAuth | 
       ]
     });
 
-    // Verify authentication by getting a token, but only if requireAuth is true
+    // Only verify the token if explicitly required
+    // This prevents blocking operations during server startup
     if (requireAuth) {
-      const client = await authClient.getClient();
-      await client.getAccessToken();
+      try {
+        const client = await authClient.getClient();
+        await client.getAccessToken();
+      } catch (verifyError) {
+        authClient = null;
+        throw verifyError;
+      }
     }
     
     return authClient;
   } catch (error) {
-    // Failed to authenticate with Google Cloud
+    // Log error but don't crash the server unless authentication is required
+    console.error(`Auth error: ${error instanceof Error ? error.message : String(error)}`);
     if (requireAuth) {
       throw error;
     }
-    authClient = null;
     return null;
   }
 }
@@ -106,42 +125,68 @@ export async function initGoogleAuth(requireAuth = false): Promise<GoogleAuth | 
  */
 export async function getProjectId(requireAuth = true): Promise<string> {
   try {
-    // First check if we have a configured default project ID
-    await configManager.initialize();
-    const configuredProjectId = configManager.getDefaultProjectId();
-    if (configuredProjectId) {
-      return configuredProjectId;
-    }
-    
-    // Next check environment variable
+    // First check environment variable (fastest method)
     if (process.env.GOOGLE_CLOUD_PROJECT) {
-      // Store this in config for future use
-      await configManager.setDefaultProjectId(process.env.GOOGLE_CLOUD_PROJECT);
+      try {
+        // Try to store in config but don't block on it
+        configManager.initialize().then(() => {
+          configManager.setDefaultProjectId(process.env.GOOGLE_CLOUD_PROJECT as string);
+        }).catch(() => {
+          // Ignore config errors
+        });
+      } catch (configError) {
+        // Ignore config errors
+      }
       return process.env.GOOGLE_CLOUD_PROJECT;
     }
     
+    // Next check if we have a configured default project ID
+    try {
+      await configManager.initialize();
+      const configuredProjectId = configManager.getDefaultProjectId();
+      if (configuredProjectId) {
+        return configuredProjectId;
+      }
+    } catch (configError) {
+      console.error(`Config error: ${configError instanceof Error ? configError.message : String(configError)}`);
+      // Continue to next method
+    }
+    
     // Fall back to getting it from auth client
-    const auth = await initGoogleAuth(requireAuth);
-    if (!auth) {
+    try {
+      const auth = await initGoogleAuth(requireAuth);
+      if (!auth) {
+        if (requireAuth) {
+          throw new Error('Google Cloud authentication not available. Please configure authentication to access project ID.');
+        }
+        return 'unknown-project';
+      }
+      
+      const projectId = await auth.getProjectId();
+      
+      if (!projectId) {
+        if (requireAuth) {
+          throw new Error('Could not determine Google Cloud project ID. Please set a default project ID using the set-project-id tool.');
+        }
+        return 'unknown-project';
+      }
+      
+      // Store this in config for future use (don't block on it)
+      configManager.initialize().then(() => {
+        configManager.setDefaultProjectId(projectId);
+      }).catch(() => {
+        // Ignore config errors
+      });
+      
+      return projectId;
+    } catch (authError) {
       if (requireAuth) {
-        throw new Error('Google Cloud authentication not available. Please configure authentication to access project ID.');
+        throw authError;
       }
       return 'unknown-project';
     }
-    
-    const projectId = await auth.getProjectId();
-    
-    if (!projectId) {
-      if (requireAuth) {
-        throw new Error('Could not determine Google Cloud project ID. Please set a default project ID using the set-project-id tool.');
-      }
-      return 'unknown-project';
-    }
-    
-    // Store this in config for future use
-    await configManager.setDefaultProjectId(projectId);
-    return projectId;
   } catch (error) {
+    console.error(`Project ID error: ${error instanceof Error ? error.message : String(error)}`);
     if (requireAuth) {
       throw error;
     }
