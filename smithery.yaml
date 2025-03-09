@@ -1,13 +1,19 @@
 # Smithery.ai configuration
 startCommand:
   type: stdio
+  # Increase timeout to prevent early disconnection
+  timeout: 60000  # 60 seconds timeout for initialization
   configSchema:
     # JSON Schema defining the configuration options for the MCP
     type: object
     properties:
       projectId:
         type: string
-        description: "Google Cloud Project ID (optional)"
+        description: "Google Cloud Project ID"
+      debug:
+        type: boolean
+        description: "Enable debug logging"
+        default: false
       credentials:
         oneOf:
           - type: object
@@ -27,7 +33,7 @@ startCommand:
                 description: "Path to Google Cloud service account key file (JSON)"
             required: ["keyFilePath"]
             description: "Google Cloud service account credentials as a key file"
-        description: "Google Cloud service account credentials (optional)"
+        description: "Google Cloud service account credentials"
     additionalProperties: false
   commandFunction:
     # A function that produces the CLI command to start the MCP on stdio
@@ -38,6 +44,11 @@ startCommand:
       // Add Google Cloud project ID if provided
       if (config.projectId) {
         env.GOOGLE_CLOUD_PROJECT = config.projectId;
+      }
+      
+      // Enable debug logging if requested
+      if (config.debug) {
+        env.DEBUG = "true";
       }
       
       // Add Google Cloud credentials if provided
