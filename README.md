@@ -77,10 +77,6 @@ pnpm install
 
 # Build
 pnpm build
-
-# Copy and configure environment variables
-cp .env.example .env
-# Edit .env with your Google Cloud settings
 ```
 
 Authenticate to Google Cloud:
