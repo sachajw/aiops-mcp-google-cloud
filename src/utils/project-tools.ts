@@ -6,6 +6,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { getProjectId, setProjectId, getRecentProjectIds } from './auth.js';
+import { stateManager } from './state-manager.js';
 
 /**
  * Registers project management tools with the MCP server
@@ -47,7 +48,14 @@ export function registerProjectTools(server: McpServer): void {
     {},
     async (_, context) => {
       try {
-        const projectId = await getProjectId();
+        // Get the current project ID from the state manager first
+        let projectId = stateManager.getCurrentProjectId();
+        
+        // If not available in state manager, try to get it from auth
+        if (!projectId) {
+          projectId = await getProjectId();
+        }
+        
         const recentProjectIds = await getRecentProjectIds();
         
         let markdown = `# Current Google Cloud Project\n\nCurrent project ID: \`${projectId}\`\n\n`;

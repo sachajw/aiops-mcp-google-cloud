@@ -19,7 +19,25 @@ export function registerSpannerResources(server: McpServer): void {
     new ResourceTemplate('gcp-spanner://{projectId}/{instanceId}/{databaseId}/schema', { list: undefined }),
     async (uri, { projectId, instanceId, databaseId }, _extra) => {
       try {
-        const actualProjectId = projectId || await getProjectId();
+        // Enhanced project ID detection with better error handling
+        let actualProjectId: string;
+        try {
+          // Handle case where projectId might be an array
+          const projectIdValue = Array.isArray(projectId) ? projectId[0] : projectId;
+          actualProjectId = projectIdValue || await getProjectId();
+          if (!actualProjectId) {
+            throw new Error('Project ID could not be determined');
+          }
+          console.log(`Using project ID: ${actualProjectId} for spanner-schema resource`);
+        } catch (error) {
+          console.error('Error detecting project ID:', error);
+          throw new GcpMcpError(
+            'Unable to detect a Project ID in the current environment.\nTo learn more about authentication and Google APIs, visit:\nhttps://cloud.google.com/docs/authentication/getting-started',
+            'UNAUTHENTICATED',
+            401
+          );
+        }
+        
         const config = await getSpannerConfig(
           Array.isArray(instanceId) ? instanceId[0] : instanceId,
           Array.isArray(databaseId) ? databaseId[0] : databaseId
@@ -47,7 +65,25 @@ export function registerSpannerResources(server: McpServer): void {
     new ResourceTemplate('gcp-spanner://{projectId}/{instanceId}/{databaseId}/tables/{tableName}/preview', { list: undefined }),
     async (uri, { projectId, instanceId, databaseId, tableName }, _extra) => {
       try {
-        const actualProjectId = projectId || await getProjectId();
+        // Enhanced project ID detection with better error handling
+        let actualProjectId: string;
+        try {
+          // Handle case where projectId might be an array
+          const projectIdValue = Array.isArray(projectId) ? projectId[0] : projectId;
+          actualProjectId = projectIdValue || await getProjectId();
+          if (!actualProjectId) {
+            throw new Error('Project ID could not be determined');
+          }
+          console.log(`Using project ID: ${actualProjectId} for table-preview resource`);
+        } catch (error) {
+          console.error('Error detecting project ID:', error);
+          throw new GcpMcpError(
+            'Unable to detect a Project ID in the current environment.\nTo learn more about authentication and Google APIs, visit:\nhttps://cloud.google.com/docs/authentication/getting-started',
+            'UNAUTHENTICATED',
+            401
+          );
+        }
+        
         const config = await getSpannerConfig(
           Array.isArray(instanceId) ? instanceId[0] : instanceId,
           Array.isArray(databaseId) ? databaseId[0] : databaseId
@@ -57,7 +93,8 @@ export function registerSpannerResources(server: McpServer): void {
           throw new GcpMcpError('Table name is required', 'INVALID_ARGUMENT', 400);
         }
         
-        const spanner = getSpannerClient();
+        const spanner = await getSpannerClient();
+        console.log(`Using Spanner client with project ID: ${spanner.projectId} for spanner-tables`);
         const instance = spanner.instance(config.instanceId);
         const database = instance.database(config.databaseId);
         
@@ -115,13 +152,32 @@ export function registerSpannerResources(server: McpServer): void {
     new ResourceTemplate('gcp-spanner://{projectId}/{instanceId}/{databaseId}/tables', { list: undefined }),
     async (uri, { projectId, instanceId, databaseId }, _extra) => {
       try {
-        const actualProjectId = projectId || await getProjectId();
+        // Enhanced project ID detection with better error handling
+        let actualProjectId: string;
+        try {
+          // Handle case where projectId might be an array
+          const projectIdValue = Array.isArray(projectId) ? projectId[0] : projectId;
+          actualProjectId = projectIdValue || await getProjectId();
+          if (!actualProjectId) {
+            throw new Error('Project ID could not be determined');
+          }
+          console.log(`Using project ID: ${actualProjectId} for spanner-tables resource`);
+        } catch (error) {
+          console.error('Error detecting project ID:', error);
+          throw new GcpMcpError(
+            'Unable to detect a Project ID in the current environment.\nTo learn more about authentication and Google APIs, visit:\nhttps://cloud.google.com/docs/authentication/getting-started',
+            'UNAUTHENTICATED',
+            401
+          );
+        }
+        
         const config = await getSpannerConfig(
           Array.isArray(instanceId) ? instanceId[0] : instanceId,
           Array.isArray(databaseId) ? databaseId[0] : databaseId
         );
         
-        const spanner = getSpannerClient();
+        const spanner = await getSpannerClient();
+        console.log(`Using Spanner client with project ID: ${spanner.projectId} for spanner-tables`);
         const instance = spanner.instance(config.instanceId);
         const database = instance.database(config.databaseId);
         
@@ -186,8 +242,27 @@ export function registerSpannerResources(server: McpServer): void {
     new ResourceTemplate('gcp-spanner://{projectId}/instances', { list: undefined }),
     async (uri, { projectId }, _extra) => {
       try {
-        const actualProjectId = projectId || await getProjectId();
-        const spanner = getSpannerClient();
+        // Enhanced project ID detection with better error handling
+        let actualProjectId: string;
+        try {
+          // Handle case where projectId might be an array
+          const projectIdValue = Array.isArray(projectId) ? projectId[0] : projectId;
+          actualProjectId = projectIdValue || await getProjectId();
+          if (!actualProjectId) {
+            throw new Error('Project ID could not be determined');
+          }
+          console.log(`Using project ID: ${actualProjectId} for spanner-instances resource`);
+        } catch (error) {
+          console.error('Error detecting project ID:', error);
+          throw new GcpMcpError(
+            'Unable to detect a Project ID in the current environment.\nTo learn more about authentication and Google APIs, visit:\nhttps://cloud.google.com/docs/authentication/getting-started',
+            'UNAUTHENTICATED',
+            401
+          );
+        }
+        
+        const spanner = await getSpannerClient();
+        console.log(`Using Spanner client with project ID: ${spanner.projectId}`);
         
         const [instances] = await spanner.getInstances();
         
@@ -238,13 +313,31 @@ export function registerSpannerResources(server: McpServer): void {
     new ResourceTemplate('gcp-spanner://{projectId}/{instanceId}/databases', { list: undefined }),
     async (uri, { projectId, instanceId }, _extra) => {
       try {
-        const actualProjectId = projectId || await getProjectId();
+        // Enhanced project ID detection with better error handling
+        let actualProjectId: string;
+        try {
+          // Handle case where projectId might be an array
+          const projectIdValue = Array.isArray(projectId) ? projectId[0] : projectId;
+          actualProjectId = projectIdValue || await getProjectId();
+          if (!actualProjectId) {
+            throw new Error('Project ID could not be determined');
+          }
+          console.log(`Using project ID: ${actualProjectId} for spanner-databases resource`);
+        } catch (error) {
+          console.error('Error detecting project ID:', error);
+          throw new GcpMcpError(
+            'Unable to detect a Project ID in the current environment.\nTo learn more about authentication and Google APIs, visit:\nhttps://cloud.google.com/docs/authentication/getting-started',
+            'UNAUTHENTICATED',
+            401
+          );
+        }
         
         if (!instanceId) {
           throw new GcpMcpError('Instance ID is required', 'INVALID_ARGUMENT', 400);
         }
         
-        const spanner = getSpannerClient();
+        const spanner = await getSpannerClient();
+        console.log(`Using Spanner client with project ID: ${spanner.projectId} for spanner-databases`);
         const instance = spanner.instance(Array.isArray(instanceId) ? instanceId[0] : instanceId);
         
         const [databases] = await instance.getDatabases();

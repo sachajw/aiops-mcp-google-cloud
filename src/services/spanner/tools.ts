@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { getProjectId } from '../../utils/auth.js';
 import { getSpannerClient, getSpannerConfig } from './types.js';
 import { getSpannerSchema } from './schema.js';
+import { stateManager } from '../../utils/state-manager.js';
 
 /**
  * Get detailed schema information for a Spanner database in a format suitable for query generation
@@ -64,7 +65,8 @@ export function registerSpannerTools(server: McpServer): void {
           Array.isArray(databaseId) ? databaseId[0] : databaseId
         );
         
-        const spanner = getSpannerClient();
+        const spanner = await getSpannerClient();
+        console.log(`Using Spanner client with project ID: ${spanner.projectId} for execute-spanner-query`);
         const instance = spanner.instance(config.instanceId);
         const database = instance.database(config.databaseId);
         
@@ -139,7 +141,8 @@ export function registerSpannerTools(server: McpServer): void {
           Array.isArray(databaseId) ? databaseId[0] : databaseId
         );
         
-        const spanner = getSpannerClient();
+        const spanner = await getSpannerClient();
+        console.log(`Using Spanner client with project ID: ${spanner.projectId} for execute-spanner-query`);
         const instance = spanner.instance(config.instanceId);
         const database = instance.database(config.databaseId);
         
@@ -212,8 +215,37 @@ export function registerSpannerTools(server: McpServer): void {
     },
     async (_params, _extra) => {
       try {
-        const projectId = await getProjectId();
-        const spanner = getSpannerClient();
+        // First try to get the project ID from the state manager
+        let projectId = stateManager.getCurrentProjectId();
+        
+        if (projectId) {
+          console.log(`Got project ID from state manager: ${projectId}`);
+        } else {
+          // If not in state manager, try to get it from environment
+          const envProjectId = process.env.GOOGLE_CLOUD_PROJECT;
+          
+          if (envProjectId) {
+            projectId = envProjectId;
+            console.log(`Got project ID from environment: ${projectId}`);
+            // Store in state manager for future use
+            await stateManager.setCurrentProjectId(projectId);
+          } else {
+            // If not in environment, try to get it from our function
+            projectId = await getProjectId();
+            console.log(`Got project ID from getProjectId: ${projectId}`);
+          }
+        }
+        
+        if (!projectId) {
+          throw new Error('Project ID could not be determined. Please set a project ID using the set-project-id tool.');
+        }
+        
+        // Create Spanner client with explicit project ID
+        const spanner = new (await import('@google-cloud/spanner')).Spanner({
+          projectId: projectId
+        });
+        
+        console.log(`Using Spanner client with explicit project ID: ${projectId} for list-spanner-instances`);
         
         const [instances] = await spanner.getInstances();
         
@@ -267,8 +299,30 @@ export function registerSpannerTools(server: McpServer): void {
     },
     async ({ instanceId }, _extra) => {
       try {
-        const projectId = await getProjectId();
-        const spanner = getSpannerClient();
+        // First try to get the project ID from the state manager
+        let projectId = stateManager.getCurrentProjectId();
+        
+        if (!projectId) {
+          // If not in state manager, try to get it from our function
+          const authProjectId = await getProjectId();
+          if (authProjectId) {
+            projectId = authProjectId;
+            console.log(`Got project ID from getProjectId: ${projectId}`);
+          }
+        } else {
+          console.log(`Got project ID from state manager: ${projectId}`);
+        }
+        
+        if (!projectId) {
+          throw new Error('Project ID could not be determined. Please set a project ID using the set-project-id tool.');
+        }
+        
+        // Create Spanner client with explicit project ID
+        const spanner = new (await import('@google-cloud/spanner')).Spanner({
+          projectId: projectId
+        });
+        
+        console.log(`Using Spanner client with project ID: ${projectId} for list-spanner-databases`);
         const instance = spanner.instance(Array.isArray(instanceId) ? instanceId[0] : instanceId);
         
         const [databases] = await instance.getDatabases();
@@ -325,7 +379,24 @@ export function registerSpannerTools(server: McpServer): void {
     },
     async ({ query, instanceId, databaseId }, _extra) => {
       try {
-        const projectId = await getProjectId();
+        // First try to get the project ID from the state manager
+        let projectId = stateManager.getCurrentProjectId();
+        
+        if (!projectId) {
+          // If not in state manager, try to get it from our function
+          const authProjectId = await getProjectId();
+          if (authProjectId) {
+            projectId = authProjectId;
+            console.log(`Got project ID from getProjectId: ${projectId}`);
+          }
+        } else {
+          console.log(`Got project ID from state manager: ${projectId}`);
+        }
+        
+        if (!projectId) {
+          throw new Error('Project ID could not be determined. Please set a project ID using the set-project-id tool.');
+        }
+        
         const config = await getSpannerConfig(
           Array.isArray(instanceId) ? instanceId[0] : instanceId,
           Array.isArray(databaseId) ? databaseId[0] : databaseId
@@ -334,8 +405,12 @@ export function registerSpannerTools(server: McpServer): void {
         // Get the schema for the database
         const schemaInfo = await getDetailedSchemaForQueryGeneration(config.instanceId, config.databaseId);
         
-        // Get a list of tables
-        const spanner = getSpannerClient();
+        // Create Spanner client with explicit project ID
+        const spanner = new (await import('@google-cloud/spanner')).Spanner({
+          projectId: projectId
+        });
+        
+        console.log(`Using Spanner client with project ID: ${projectId} for execute-spanner-query`);
         const instance = spanner.instance(config.instanceId);
         const database = instance.database(config.databaseId);
         

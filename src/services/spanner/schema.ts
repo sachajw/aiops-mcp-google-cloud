@@ -11,7 +11,8 @@ import { SpannerSchema, SpannerTable, getSpannerClient } from './types.js';
  * @returns Schema information for the database
  */
 export async function getSpannerSchema(instanceId: string, databaseId: string): Promise<SpannerSchema> {
-  const spanner = getSpannerClient();
+  const spanner = await getSpannerClient();
+  console.log(`Using Spanner client with project ID: ${spanner.projectId} for getSpannerSchema`);
   const instance = spanner.instance(instanceId);
   const database = instance.database(databaseId);
   

@@ -40,9 +40,31 @@ export interface SpannerIndex {
  * 
  * @returns A configured Spanner client
  */
-export function getSpannerClient(): Spanner {
+export async function getSpannerClient(): Promise<Spanner> {
+  // Import the state manager here to avoid circular dependencies
+  const { stateManager } = await import('../../utils/state-manager.js');
+  
+  // Get the project ID from state manager
+  let projectId = stateManager.getCurrentProjectId();
+  
+  // If not available in state manager, try to get it from auth
+  if (!projectId) {
+    const { getProjectId } = await import('../../utils/auth.js');
+    projectId = await getProjectId();
+  }
+  
+  if (!projectId) {
+    throw new GcpMcpError(
+      'Unable to detect a Project ID in the current environment.\nTo learn more about authentication and Google APIs, visit:\nhttps://cloud.google.com/docs/authentication/getting-started',
+      'UNAUTHENTICATED',
+      401
+    );
+  }
+  
+  console.log(`Initializing Spanner client with project ID: ${projectId}`);
+  
   return new Spanner({
-    projectId: process.env.GOOGLE_CLOUD_PROJECT
+    projectId: projectId
   });
 }
 

@@ -5,6 +5,7 @@ import { GoogleAuth } from 'google-auth-library';
 import fs from 'fs';
 import path from 'path';
 import { configManager } from './config.js';
+import { stateManager } from './state-manager.js';
 
 // Global auth client that can be reused
 // Exported to allow checking auth status from other modules
@@ -118,26 +119,49 @@ export async function initGoogleAuth(requireAuth = false): Promise<GoogleAuth | 
 }
 
 /**
- * Gets the project ID from configuration, environment variables, or from the authenticated client
+ * Gets the project ID from the state manager, environment variables, or from the authenticated client
  * 
  * @param requireAuth If true, will throw an error if project ID can't be determined. If false, will return a default value.
  * @returns Promise resolving to the Google Cloud project ID or a default value if not available
  */
 export async function getProjectId(requireAuth = true): Promise<string> {
   try {
-    // First check environment variable (fastest method)
+    // First check the state manager (fastest and most reliable method)
+    const stateProjectId = stateManager.getCurrentProjectId();
+    if (stateProjectId) {
+      console.log(`Using project ID from state manager: ${stateProjectId}`);
+      return stateProjectId;
+    }
+    
+    // Next check environment variable
     if (process.env.GOOGLE_CLOUD_PROJECT) {
-      try {
-        // Try to store in config but don't block on it
-        configManager.initialize().then(() => {
-          configManager.setDefaultProjectId(process.env.GOOGLE_CLOUD_PROJECT as string);
-        }).catch(() => {
-          // Ignore config errors
-        });
-      } catch (configError) {
-        // Ignore config errors
-      }
+      console.log(`Using project ID from environment: ${process.env.GOOGLE_CLOUD_PROJECT}`);
+      // Store in state manager for future use
+      await stateManager.setCurrentProjectId(process.env.GOOGLE_CLOUD_PROJECT);
       return process.env.GOOGLE_CLOUD_PROJECT;
+    }
+    
+    // Check if we have credentials file and try to extract project ID from it
+    if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+      try {
+        const credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+        console.log(`Attempting to read project ID from credentials file: ${credentialsPath}`);
+        
+        if (fs.existsSync(credentialsPath)) {
+          const credentialsContent = fs.readFileSync(credentialsPath, 'utf8');
+          const credentials = JSON.parse(credentialsContent);
+          
+          if (credentials.project_id) {
+            console.log(`Found project ID in credentials file: ${credentials.project_id}`);
+            // Store in state manager for future use
+            await stateManager.setCurrentProjectId(credentials.project_id);
+            return credentials.project_id;
+          }
+        }
+      } catch (fileError) {
+        console.error(`Error reading credentials file: ${fileError instanceof Error ? fileError.message : String(fileError)}`);
+        // Continue to next method
+      }
     }
     
     // Next check if we have a configured default project ID
@@ -145,6 +169,9 @@ export async function getProjectId(requireAuth = true): Promise<string> {
       await configManager.initialize();
       const configuredProjectId = configManager.getDefaultProjectId();
       if (configuredProjectId) {
+        console.log(`Using project ID from config: ${configuredProjectId}`);
+        // Store in state manager for future use
+        await stateManager.setCurrentProjectId(configuredProjectId);
         return configuredProjectId;
       }
     } catch (configError) {
@@ -154,32 +181,35 @@ export async function getProjectId(requireAuth = true): Promise<string> {
     
     // Fall back to getting it from auth client
     try {
+      console.log('Attempting to get project ID from auth client...');
       const auth = await initGoogleAuth(requireAuth);
       if (!auth) {
+        console.error('Authentication client not available');
         if (requireAuth) {
           throw new Error('Google Cloud authentication not available. Please configure authentication to access project ID.');
         }
         return 'unknown-project';
       }
       
+      console.log('Auth client available, requesting project ID...');
       const projectId = await auth.getProjectId();
       
       if (!projectId) {
+        console.error('Auth client returned empty project ID');
         if (requireAuth) {
-          throw new Error('Could not determine Google Cloud project ID. Please set a default project ID using the set-project-id tool.');
+          throw new Error('Could not determine Google Cloud project ID. Please set GOOGLE_CLOUD_PROJECT environment variable or use the set-project-id tool.');
         }
         return 'unknown-project';
       }
       
-      // Store this in config for future use (don't block on it)
-      configManager.initialize().then(() => {
-        configManager.setDefaultProjectId(projectId);
-      }).catch(() => {
-        // Ignore config errors
-      });
+      console.log(`Got project ID from auth client: ${projectId}`);
+      
+      // Store in state manager for future use
+      await stateManager.setCurrentProjectId(projectId);
       
       return projectId;
     } catch (authError) {
+      console.error(`Auth error while getting project ID: ${authError instanceof Error ? authError.message : String(authError)}`);
       if (requireAuth) {
         throw authError;
       }
@@ -200,9 +230,8 @@ export async function getProjectId(requireAuth = true): Promise<string> {
  * @param projectId The project ID to set as default
  */
 export async function setProjectId(projectId: string): Promise<void> {
-  await configManager.initialize();
-  await configManager.setDefaultProjectId(projectId);
-  // Default project ID set
+  // Use the state manager to set the project ID
+  await stateManager.setCurrentProjectId(projectId);
 }
 
 /**
