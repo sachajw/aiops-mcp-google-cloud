@@ -100,7 +100,7 @@ Configure the `mcpServers` in your client:
               "/Users/foo/code/google-cloud-mcp/dist/index.js"
           ],
           "env": {
-              "GOOGLE_APPLICATION_CREDENTIALS": "/Users/kristof/.config/gcloud/application_default_credentials.json"
+              "GOOGLE_APPLICATION_CREDENTIALS": "/Users/foo/.config/gcloud/application_default_credentials.json"
           }
       }
   }
