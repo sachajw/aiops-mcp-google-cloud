@@ -2,8 +2,6 @@
 
 A Model Context Protocol server that connects to Google Cloud services to provide context and tools for interacting with your Google Cloud resources.
 
-More services may be added in the future.
-
 ## Services
 
 Supported services:
@@ -12,7 +10,7 @@ Supported services:
 - [x] Google Cloud Monitoring
 - [x] Google Cloud Spanner
 
-In development:
+Servers in development:
 
 - [ ] Google Cloud Trace
 - [ ] Google IAM
