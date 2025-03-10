@@ -4,6 +4,7 @@
 import * as traceAgent from '@google-cloud/trace-agent';
 import { PluginTypes } from '@google-cloud/trace-agent';
 import { getProjectId } from '../../utils/auth.js';
+import { stateManager } from '../../utils/state-manager.js';
 import { GcpMcpError } from '../../utils/error.js';
 import { logger } from '../../utils/logger.js';
 
@@ -65,19 +66,29 @@ export interface TraceData {
 export function getTraceClient(): PluginTypes.Tracer {
   if (!traceClient) {
     try {
+      // Get project ID from state manager if available
+      const projectId = stateManager.getCurrentProjectId();
+      
       // Initialize the trace agent
-      traceClient = traceAgent.start({
+      const config: any = {
         samplingRate: 1, // Sample all traces for now
         ignoreUrls: ['/health', '/readiness'], // Ignore health check endpoints
         serviceContext: {
           service: 'google-cloud-mcp',
           version: '0.1.0'
         }
-      });
+      };
       
-      // Successfully initialized Google Cloud Trace client
+      // Add project ID if available
+      if (projectId) {
+        config.projectId = projectId;
+      }
+      
+      traceClient = traceAgent.start(config);
+      logger.debug(`Initialized Google Cloud Trace client${projectId ? ` for project ${projectId}` : ''}`);      
     } catch (error) {
       // Failed to initialize Google Cloud Trace client
+      logger.error(`Failed to initialize Google Cloud Trace client: ${error instanceof Error ? error.message : String(error)}`);
       throw new GcpMcpError(
         'Failed to initialize Google Cloud Trace client',
         'INTERNAL',
@@ -326,6 +337,8 @@ function calculateDuration(startTime: string, endTime: string): string {
   }
 }
 
+// Note: We only use the v1 API for querying trace data
+
 /**
  * Builds a hierarchical trace structure from flat spans
  * 
@@ -347,6 +360,8 @@ export function buildTraceHierarchy(
     logger.debug(`First span structure: ${JSON.stringify(spans[0], null, 2)}`);
     logger.debug(`First span keys: ${Object.keys(spans[0]).join(', ')}`);
   }
+  
+  // We're using the v1 API which returns spans in a consistent format
   
   // Map to store spans by ID for quick lookup
   const spanMap = new Map<string, TraceSpan>();

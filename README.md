@@ -9,12 +9,12 @@ More services may be added in the future.
 Supported services:
 
 - [x] Google Cloud Logging
-- [x] Google Cloud Spanner
 - [x] Google Cloud Monitoring
-- [x] Google Cloud Trace
+- [x] Google Cloud Spanner
 
 In development:
 
+- [ ] Google Cloud Trace
 - [ ] Google IAM
 - [ ] Google Cloud Compute
 - [ ] Google Cloud Run

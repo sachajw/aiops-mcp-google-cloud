@@ -8,6 +8,7 @@ import { GcpMcpError } from '../../utils/error.js';
 import { buildTraceHierarchy, formatTraceData, extractTraceIdFromLog } from './types.js';
 import { Logging } from '@google-cloud/logging';
 import { logger } from '../../utils/logger.js';
+import { stateManager } from '../../utils/state-manager.js';
 
 /**
  * Registers Google Cloud Trace tools with the MCP server
@@ -24,8 +25,8 @@ export async function registerTraceTools(server: McpServer): Promise<void> {
     },
     async ({ traceId, projectId }, context) => {
       try {
-        // Use provided project ID or get the default one
-        const actualProjectId = projectId || await getProjectId();
+        // Use provided project ID or get the default one from state manager first
+        const actualProjectId = projectId || stateManager.getCurrentProjectId() || await getProjectId();
         
         // Validate trace ID format (hex string)
         if (typeof traceId === 'string' && !traceId.match(/^[a-f0-9]+$/i)) {
@@ -50,9 +51,10 @@ export async function registerTraceTools(server: McpServer): Promise<void> {
         
         // Fetch the trace from the Cloud Trace API v1
         // API Reference: https://cloud.google.com/trace/docs/reference/v1/rest/v1/projects.traces/get
-        logger.debug(`Fetching trace from: https://cloudtrace.googleapis.com/v1/projects/${actualProjectId}/traces/${traceId}`);
+        const apiUrl = `https://cloudtrace.googleapis.com/v1/projects/${actualProjectId}/traces/${traceId}`;
+        logger.debug(`Fetching trace from: ${apiUrl}`);
         const response = await fetch(
-          `https://cloudtrace.googleapis.com/v1/projects/${actualProjectId}/traces/${traceId}`,
+          apiUrl,
           {
             method: 'GET',
             headers: {
@@ -230,12 +232,12 @@ export async function registerTraceTools(server: McpServer): Promise<void> {
       projectId: z.string().optional().describe('Optional Google Cloud project ID'),
       filter: z.string().optional().describe('Optional filter for traces (e.g., "status.code != 0" for errors)'),
       limit: z.number().min(1).max(100).default(10).describe('Maximum number of traces to return'),
-      startTime: z.string().optional().describe('Start time in ISO format or relative time (e.g., "1h", "2d")')
+      startTime: z.string().optional().describe('Start time in RFC3339 format (e.g., "2023-01-01T00:00:00Z") or relative time (e.g., "1h", "2d")')
     },
     async ({ projectId, filter, limit, startTime }, context) => {
       try {
-        // Use provided project ID or get the default one
-        const actualProjectId = projectId || await getProjectId();
+        // Use provided project ID or get the default one from state manager first
+        const actualProjectId = projectId || stateManager.getCurrentProjectId() || await getProjectId();
         
         // Calculate time range
         const endTime = new Date();
@@ -248,6 +250,7 @@ export async function registerTraceTools(server: McpServer): Promise<void> {
           const startTimeStr = typeof startTime === 'string' ? startTime : String(startTime);
           logger.debug(`Processing startTime: ${startTimeStr}`);
           
+          // Check if the input is a relative time format (e.g., "1h", "2d", "30m")
           if (startTimeStr.match(/^\d+[hmd]$/)) {
             // Parse relative time (e.g., "1h", "2d")
             const value = parseInt(startTimeStr.slice(0, -1));
@@ -300,19 +303,31 @@ export async function registerTraceTools(server: McpServer): Promise<void> {
         
         // Format timestamps in RFC3339 UTC "Zulu" format as required by the API
         // Example format: "2014-10-02T15:01:23Z"
-        const startTimeUTC = new Date(startTimeDate.toISOString()).toISOString();
-        const endTimeUTC = new Date(endTime.toISOString()).toISOString();
+        // The Cloud Trace API requires RFC3339 format timestamps
+        const startTimeUTC = startTimeDate.toISOString();
+        const endTimeUTC = endTime.toISOString();
+        
+        logger.debug(`Using formatted timestamps: startTime=${startTimeUTC}, endTime=${endTimeUTC}`);
         
         // Build the query parameters for the request according to the API documentation
         const queryParams = new URLSearchParams();
         
-        // Required parameters
+        // Required parameters - format must be RFC3339 UTC "Zulu" format
+        // The Cloud Trace API requires timestamps in RFC3339 format
+        // Example: "2014-10-02T15:01:23Z"
         queryParams.append('startTime', startTimeUTC); // Start of the time interval (inclusive)
         queryParams.append('endTime', endTimeUTC);     // End of the time interval (inclusive)
         
         // Optional parameters
         queryParams.append('pageSize', limit.toString()); // Maximum number of traces to return
-        queryParams.append('view', 'MINIMAL');           // Type of data returned (MINIMAL, ROOTSPAN, COMPLETE)
+        
+        // The view parameter is optional and defaults to MINIMAL
+        // ROOTSPAN includes the root span with the trace
+        // COMPLETE includes all spans with the trace
+        queryParams.append('view', 'COMPLETE');           // Type of data returned (MINIMAL, ROOTSPAN, COMPLETE)
+        
+        // Add orderBy parameter to sort by most recent traces first
+        queryParams.append('orderBy', 'start desc');      // Sort by start time descending
         
         // Optional filter parameter
         if (filter) {
@@ -327,33 +342,57 @@ export async function registerTraceTools(server: McpServer): Promise<void> {
         
         logger.debug(`List Traces URL: ${requestUrl}`);
         logger.debug(`List Traces Query Params: ${JSON.stringify(Object.fromEntries(queryParams.entries()))}`);
+        logger.debug(`List Traces Time Range: ${startTimeDate.toISOString()} to ${endTime.toISOString()}`);
+        logger.debug(`List Traces Raw Query String: ${queryParams.toString()}`);
         
         // Fetch traces from the Cloud Trace API
-        const response = await fetch(
-          requestUrl,
-          {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${token.token}`,
-              'Accept': 'application/json'
+        logger.debug(`Sending request to Cloud Trace API: ${requestUrl}`);
+        let tracesData;
+        
+        try {
+          const response = await fetch(
+            requestUrl,
+            {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${token.token}`,
+                'Accept': 'application/json'
+              }
             }
+          );
+          
+          logger.debug(`List Traces Response Status: ${response.status}`);
+          
+          if (!response.ok) {
+            const errorText = await response.text();
+            logger.error(`List Traces Error: ${errorText}`);
+            throw new GcpMcpError(
+              `Failed to list traces: ${errorText}`,
+              'FAILED_PRECONDITION',
+              response.status
+            );
           }
-        );
-        
-        logger.debug(`List Traces Response Status: ${response.status}`);
-        
-        if (!response.ok) {
-          const errorText = await response.text();
-          logger.error(`List Traces Error: ${errorText}`);
+          
+          // Log the full response headers to help debug
+          const responseHeaders: Record<string, string> = {};
+          response.headers.forEach((value, key) => {
+            responseHeaders[key] = value;
+          });
+          logger.debug(`List Traces Response Headers: ${JSON.stringify(responseHeaders)}`);
+          
+          tracesData = await response.json();
+          logger.debug(`List Traces Response Data: ${JSON.stringify(tracesData, null, 2)}`);
+        } catch (fetchError: any) {
+          logger.error(`Fetch error: ${fetchError.message}`);
           throw new GcpMcpError(
-            `Failed to list traces: ${errorText}`,
-            'FAILED_PRECONDITION',
-            response.status
+            `Failed to fetch traces: ${fetchError.message}`,
+            'INTERNAL',
+            500
           );
         }
         
-        const tracesData = await response.json();
-        
+        // Check if we have valid traces data
+        // In v1 API, the response contains a traces array
         if (!tracesData.traces || tracesData.traces.length === 0) {
           return {
             content: [{
@@ -363,36 +402,8 @@ export async function registerTraceTools(server: McpServer): Promise<void> {
           };
         }
         
-        // Format the traces for display
-        let markdown = `# Traces for ${actualProjectId}\n\n`;
-        markdown += `Time Range: ${startTimeDate.toISOString()} to ${endTime.toISOString()}\n`;
-        markdown += `Filter: ${filter || 'None'}\n\n`;
-        markdown += `Found ${tracesData.traces.length} traces:\n\n`;
-        
-        // Table header
-        markdown += '| Trace ID | Display Name | Start Time | Duration | Status |\n';
-        markdown += '|----------|--------------|------------|----------|--------|\n';
-        
-        // Table rows
-        for (const trace of tracesData.traces) {
-          const traceId = trace.traceId;
-          const displayName = trace.displayName || 'Unknown';
-          const startTimeStr = new Date(trace.startTime).toISOString();
-          const duration = calculateDuration(trace.startTime, trace.endTime);
-          const status = trace.status?.code === 0 ? '✅ OK' : 
-                       trace.status?.code > 0 ? '❌ ERROR' : '⚪ UNKNOWN';
-          
-          markdown += `| \`${traceId}\` | ${displayName} | ${startTimeStr} | ${duration} | ${status} |\n`;
-        }
-        
-        markdown += '\n\nTo view a specific trace, use the `get-trace` tool with the trace ID.';
-        
-        return {
-          content: [{
-            type: 'text',
-            text: markdown
-          }]
-        };
+        // Use the helper function to format the response
+        return formatTracesResponse(tracesData, actualProjectId, startTimeDate, endTime, filter);
       } catch (error: any) {
         // Error handling for list-traces tool
         throw new GcpMcpError(
@@ -414,8 +425,8 @@ export async function registerTraceTools(server: McpServer): Promise<void> {
     },
     async ({ projectId, filter, limit }, context) => {
       try {
-        // Use provided project ID or get the default one
-        const actualProjectId = projectId || await getProjectId();
+        // Use provided project ID or get the default one from state manager first
+        const actualProjectId = projectId || stateManager.getCurrentProjectId() || await getProjectId();
         
         // Process the filter to handle relative time formats
         let processedFilter = filter;
@@ -616,8 +627,8 @@ export async function registerTraceTools(server: McpServer): Promise<void> {
     },
     async ({ query, projectId }, context) => {
       try {
-        // Use provided project ID or get the default one
-        const actualProjectId = projectId || await getProjectId();
+        // Use provided project ID or get the default one from state manager first
+        const actualProjectId = projectId || stateManager.getCurrentProjectId() || await getProjectId();
         
         // Process the natural language query
         const normalizedQuery = query.toLowerCase();
@@ -898,6 +909,7 @@ export async function registerTraceTools(server: McpServer): Promise<void> {
           const startTimeStr = typeof startTime === 'string' ? startTime : String(startTime);
           logger.debug(`Processing startTime: ${startTimeStr}`);
           
+          // Check if the input is a relative time format (e.g., "1h", "2d", "30m")
           if (startTimeStr.match(/^\d+[hmd]$/)) {
             // Parse relative time (e.g., "1h", "2d")
             const value = parseInt(startTimeStr.slice(0, -1));
@@ -1006,6 +1018,8 @@ export async function registerTraceTools(server: McpServer): Promise<void> {
         
         const tracesData = await response.json();
         
+        // Check if we have valid traces data
+        // In v1 API, the response contains a traces array
         if (!tracesData.traces || tracesData.traces.length === 0) {
           return {
             content: [{
@@ -1075,4 +1089,53 @@ function calculateDuration(startTime: string, endTime: string): string {
     const seconds = ((durationMs % 60000) / 1000).toFixed(2);
     return `${minutes}m ${seconds}s`;
   }
+}
+
+/**
+ * Formats the traces response for display
+ * 
+ * @param tracesData The traces data from the API
+ * @param projectId The Google Cloud project ID
+ * @param startTime The start time of the query
+ * @param endTime The end time of the query
+ * @param filter The filter used in the query
+ * @returns Formatted response
+ */
+function formatTracesResponse(
+  tracesData: any,
+  projectId: string,
+  startTime: Date,
+  endTime: Date,
+  filter?: string
+): any {
+  // Format the traces for display
+  let markdown = `# Traces for ${projectId}\n\n`;
+  markdown += `Time Range: ${startTime.toISOString()} to ${endTime.toISOString()}\n`;
+  markdown += `Filter: ${filter || 'None'}\n\n`;
+  markdown += `Found ${tracesData.traces.length} traces:\n\n`;
+  
+  // Table header
+  markdown += '| Trace ID | Display Name | Start Time | Duration | Status |\n';
+  markdown += '|----------|--------------|------------|----------|--------|\n';
+  
+  // Table rows
+  for (const trace of tracesData.traces) {
+    const traceId = trace.traceId;
+    const displayName = trace.displayName || 'Unknown';
+    const startTimeStr = new Date(trace.startTime).toISOString();
+    const duration = calculateDuration(trace.startTime, trace.endTime);
+    const status = trace.status?.code === 0 ? '✅ OK' : 
+                 trace.status?.code > 0 ? '❌ ERROR' : '⚪ UNKNOWN';
+    
+    markdown += `| \`${traceId}\` | ${displayName} | ${startTimeStr} | ${duration} | ${status} |\n`;
+  }
+  
+  markdown += '\n\nTo view a specific trace, use the `get-trace` tool with the trace ID.';
+  
+  return {
+    content: [{
+      type: 'text',
+      text: markdown
+    }]
+  };
 }
