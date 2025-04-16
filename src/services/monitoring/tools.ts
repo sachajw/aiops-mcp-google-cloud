@@ -102,7 +102,7 @@ export async function registerMonitoringTools(server: McpServer): Promise<void> 
           };
         }
         
-        const formattedData = formatTimeSeriesData(timeSeries as unknown as TimeSeriesData[]);
+        const formattedData = formatTimeSeriesData(timeSeries);
         
         return {
           content: [{
@@ -347,7 +347,7 @@ export async function registerMonitoringTools(server: McpServer): Promise<void> 
           };
         }
         
-        const formattedData = formatTimeSeriesData(timeSeries as unknown as TimeSeriesData[]);
+        const formattedData = formatTimeSeriesData(timeSeries);
         
         return {
           content: [{
