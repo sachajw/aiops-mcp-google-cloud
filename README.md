@@ -2,6 +2,10 @@
 
 A Model Context Protocol server that connects to Google Cloud services to provide context and tools for interacting with your Google Cloud resources.
 
+<a href="https://glama.ai/mcp/servers/@krzko/google-cloud-mcp">
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/@krzko/google-cloud-mcp/badge" alt="Google Cloud Server MCP server" />
+</a>
+
 ## Services
 
 Supported services:
@@ -61,7 +65,6 @@ This server supports two methods of authentication with Google Cloud:
 2. **Environment Variables**: Set `GOOGLE_CLIENT_EMAIL` and `GOOGLE_PRIVATE_KEY` environment variables directly. This is useful for environments where storing a key file is not practical.
 
 The server will also use the `GOOGLE_CLOUD_PROJECT` environment variable if set, otherwise it will attempt to determine the project ID from the authentication credentials.
-
 
 ## Installation
 
@@ -154,4 +157,3 @@ If you're having authentication issues, make sure:
 - Your service account has the necessary permissions
 - The key file is properly formatted and accessible
 - Environment variables are correctly set
-
