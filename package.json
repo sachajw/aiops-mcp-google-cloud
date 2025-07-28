@@ -1,6 +1,6 @@
 {
   "name": "google-cloud-mcp",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Model Context Protocol server for Google Cloud services",
   "type": "module",
   "main": "dist/index.js",
@@ -48,5 +48,6 @@
   },
   "engines": {
     "node": ">=18.0.0"
-  }
+  },
+  "packageManager": "pnpm@9.15.4"
 }

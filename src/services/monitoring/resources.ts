@@ -20,14 +20,14 @@ export function registerMonitoringResources(server: McpServer): void {
       try {
         const actualProjectId = projectId || await getProjectId();
         const client = getMonitoringClient();
-        
+
         // Default filter from environment variable or use a common metric
         const defaultFilter = process.env.MONITORING_FILTER || 'metric.type="compute.googleapis.com/instance/cpu/utilization"';
-        
+
         // Create time range for the last hour
         const now = new Date();
         const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-        
+
         const [timeSeries] = await client.listTimeSeries({
           name: `projects/${actualProjectId}`,
           filter: defaultFilter,
@@ -42,7 +42,7 @@ export function registerMonitoringResources(server: McpServer): void {
             }
           }
         });
-        
+
         if (!timeSeries || timeSeries.length === 0) {
           return {
             contents: [{
@@ -51,9 +51,9 @@ export function registerMonitoringResources(server: McpServer): void {
             }]
           };
         }
-        
-        const formattedData = formatTimeSeriesData(timeSeries as unknown as TimeSeriesData[]);
-        
+
+        const formattedData = formatTimeSeriesData(timeSeries);
+
         return {
           contents: [{
             uri: uri.href,
@@ -78,17 +78,17 @@ export function registerMonitoringResources(server: McpServer): void {
       try {
         const actualProjectId = projectId || await getProjectId();
         const client = getMonitoringClient();
-        
+
         if (!filter) {
           throw new GcpMcpError('Metric filter is required', 'INVALID_ARGUMENT', 400);
         }
-        
+
         const decodedFilter = Array.isArray(filter) ? decodeURIComponent(filter[0]) : decodeURIComponent(filter);
-        
+
         // Create time range for the last hour
         const now = new Date();
         const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-        
+
         const [timeSeries] = await client.listTimeSeries({
           name: `projects/${actualProjectId}`,
           filter: decodedFilter,
@@ -103,7 +103,7 @@ export function registerMonitoringResources(server: McpServer): void {
             }
           }
         });
-        
+
         if (!timeSeries || timeSeries.length === 0) {
           return {
             contents: [{
@@ -112,9 +112,9 @@ export function registerMonitoringResources(server: McpServer): void {
             }]
           };
         }
-        
-        const formattedData = formatTimeSeriesData(timeSeries as unknown as TimeSeriesData[]);
-        
+
+        const formattedData = formatTimeSeriesData(timeSeries);
+
         return {
           contents: [{
             uri: uri.href,
