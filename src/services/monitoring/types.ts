@@ -1,8 +1,8 @@
 /**
  * Type definitions for Google Cloud Monitoring service
  */
-import monitoring from '@google-cloud/monitoring';
-import { google } from '@google-cloud/monitoring/build/protos/protos.js';
+import monitoring from "@google-cloud/monitoring";
+import { google } from "@google-cloud/monitoring/build/protos/protos.js";
 const { MetricServiceClient } = monitoring;
 
 /**
@@ -36,41 +36,43 @@ export interface TimeSeriesData {
 
 /**
  * Initialises the Google Cloud Monitoring client
- * 
+ *
  * @returns A configured Monitoring client
  */
 export function getMonitoringClient() {
   return new MetricServiceClient({
-    projectId: process.env.GOOGLE_CLOUD_PROJECT
+    projectId: process.env.GOOGLE_CLOUD_PROJECT,
   });
 }
 
 /**
  * Formats a time series data point for display
- * 
+ *
  * @param timeSeries The time series data to format
  * @returns A formatted string representation of the time series data
  */
-export function formatTimeSeriesData(timeSeries: google.monitoring.v3.ITimeSeries[]): string {
+export function formatTimeSeriesData(
+  timeSeries: google.monitoring.v3.ITimeSeries[],
+): string {
   if (!timeSeries || timeSeries.length === 0) {
-    return 'No time series data found.';
+    return "No time series data found.";
   }
 
-  let result = '';
+  let result = "";
 
   for (const series of timeSeries) {
     // Format metric information
     const metricType = series.metric?.type;
     const metricLabels = series.metric?.labels
       ? Object.entries(series.metric?.labels)
-        .map(([k, v]) => `${k}=${v}`)
-        .join(', ')
-      : '';
+          .map(([k, v]) => `${k}=${v}`)
+          .join(", ")
+      : "";
 
     const resourceType = series.resource?.type;
     const resourceLabels = Object.entries(series.resource?.labels ?? {})
       .map(([k, v]) => `${k}=${v}`)
-      .join(', ');
+      .join(", ");
 
     result += `## Metric: ${metricType}\n`;
     result += `- Resource: ${resourceType}(${resourceLabels})\n`;
@@ -80,31 +82,33 @@ export function formatTimeSeriesData(timeSeries: google.monitoring.v3.ITimeSerie
     result += `- Kind: ${series.metricKind}, Type: ${series.valueType}\n\n`;
 
     // Format data points
-    result += '| Timestamp | Value |\n';
-    result += '|-----------|-------|\n';
+    result += "| Timestamp | Value |\n";
+    result += "|-----------|-------|\n";
 
     for (const point of series.points ?? []) {
-      const timestamp = new Date(Number(point.interval?.endTime?.seconds) * 1000).toISOString();
+      const timestamp = new Date(
+        Number(point.interval?.endTime?.seconds) * 1000,
+      ).toISOString();
       // Extract the value based on valueType
       let value: string;
       if (point.value?.boolValue !== undefined) {
-        value = String(point.value?.boolValue) ?? 'N/A';
+        value = String(point.value?.boolValue) ?? "N/A";
       } else if (point.value?.int64Value !== undefined) {
-        value = point.value?.int64Value?.toString() ?? 'N/A';
+        value = point.value?.int64Value?.toString() ?? "N/A";
       } else if (point.value?.doubleValue !== undefined) {
-        value = point.value?.doubleValue?.toFixed(6) ?? 'N/A';
+        value = point.value?.doubleValue?.toFixed(6) ?? "N/A";
       } else if (point.value?.stringValue !== undefined) {
-        value = point.value?.stringValue ?? 'N/A';
+        value = point.value?.stringValue ?? "N/A";
       } else if (point.value?.distributionValue) {
-        value = 'Distribution';
+        value = "Distribution";
       } else {
-        value = 'N/A';
+        value = "N/A";
       }
 
       result += `| ${timestamp} | ${value} |\n`;
     }
 
-    result += '\n---\n\n';
+    result += "\n---\n\n";
   }
 
   return result;

@@ -10,6 +10,7 @@ A Model Context Protocol server that connects to Google Cloud services to provid
 
 Supported services:
 
+- [x] Google Cloud IAM
 - [x] Google Cloud Logging
 - [x] Google Cloud Monitoring
 - [x] Google Cloud Spanner
@@ -17,10 +18,19 @@ Supported services:
 Servers in development:
 
 - [ ] Google Cloud Trace
-- [ ] Google IAM
 - [ ] Google Cloud Compute
 - [ ] Google Cloud Run
 - [ ] Google Cloud Storage
+
+### Google Cloud IAM
+
+Query and analyse IAM policies and permissions:
+
+- Retrieve project-level IAM policies with detailed summaries
+- Test IAM permissions on projects and specific resources
+- Validate deployment permissions for common GCP services (Cloud Run, GKE, Compute Engine, etc.)
+- Analyse permission gaps for specific operations
+- Generate IAM policy analysis with security insights
 
 ### Google Cloud Logging
 

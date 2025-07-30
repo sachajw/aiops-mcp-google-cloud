@@ -1,28 +1,28 @@
 /**
  * Resource discovery utilities for MCP server
- * 
+ *
  * This module provides functions to register resource discovery endpoints
  * that allow clients to list available resources.
  */
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { getProjectId } from './auth.js';
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { getProjectId } from "./auth.js";
 
 /**
  * Register resource discovery handlers with the MCP server
- * 
+ *
  * @param server The MCP server instance
  */
-export async function registerResourceDiscovery(server: McpServer): Promise<void> {
+export async function registerResourceDiscovery(
+  server: McpServer,
+): Promise<void> {
   // Get the project ID for constructing resource URIs
   const projectId = await getProjectId();
-  
+
   // Register a resource list endpoint
-  server.resource(
-    'resource-list',
-    'resources://list',
-    async (uri) => {
-      return {
-        contents: [{
+  server.resource("resource-list", "resources://list", async (uri) => {
+    return {
+      contents: [
+        {
           uri: uri.href,
           text: `# Google Cloud MCP Resources
 
@@ -96,19 +96,17 @@ In addition to these resources, the following tools are available:
 * **spanner-query-count** - Get query count metrics for Spanner databases
 
 For detailed information about each tool, use the MCP protocol's tool discovery mechanism.
-`
-        }]
-      };
-    }
-  );
+`,
+        },
+      ],
+    };
+  });
 
   // Register service-specific resource lists
-  server.resource(
-    'spanner-resources',
-    'resources://spanner',
-    async (uri) => {
-      return {
-        contents: [{
+  server.resource("spanner-resources", "resources://spanner", async (uri) => {
+    return {
+      contents: [
+        {
           uri: uri.href,
           text: `# Google Cloud Spanner Resources
 
@@ -168,18 +166,16 @@ This page lists all available resources for working with Google Cloud Spanner.
 6. **Execute queries** using the execute-spanner-query tool
 
 **Note**: Replace 'test-instance', 'my-database', and 'users' with your actual instance ID, database ID, and table name from the previous steps.
-`
-        }]
-      };
-    }
-  );
+`,
+        },
+      ],
+    };
+  });
 
-  server.resource(
-    'logging-resources',
-    'resources://logging',
-    async (uri) => {
-      return {
-        contents: [{
+  server.resource("logging-resources", "resources://logging", async (uri) => {
+    return {
+      contents: [
+        {
           uri: uri.href,
           text: `# Google Cloud Logging Resources
 
@@ -198,20 +194,21 @@ This page lists all available resources for working with Google Cloud Logging.
 1. Start with recent logs to see the latest activity
 2. Use filters to narrow down to specific log entries
 3. Filter syntax follows Google Cloud Logging filter syntax
-`
-        }]
-      };
-    }
-  );
+`,
+        },
+      ],
+    };
+  });
 
   server.resource(
-    'monitoring-resources',
-    'resources://monitoring',
+    "monitoring-resources",
+    "resources://monitoring",
     async (uri) => {
       return {
-        contents: [{
-          uri: uri.href,
-          text: `# Google Cloud Monitoring Resources
+        contents: [
+          {
+            uri: uri.href,
+            text: `# Google Cloud Monitoring Resources
 
 This page lists all available resources for working with Google Cloud Monitoring.
 
@@ -236,9 +233,10 @@ This page lists all available resources for working with Google Cloud Monitoring
 1. Start by exploring available metric types
 2. Use filters to narrow down to specific metrics
 3. Use the spanner-query-count tool for detailed Spanner metrics
-`
-        }]
+`,
+          },
+        ],
       };
-    }
+    },
   );
 }

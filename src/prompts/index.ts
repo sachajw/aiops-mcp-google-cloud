@@ -1,321 +1,370 @@
 /**
  * Prompts for Google Cloud MCP Server
- * 
+ *
  * This module defines reusable prompt templates for interacting with Google Cloud services.
  */
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { z } from 'zod';
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod";
 
 /**
  * Register all prompts with the MCP server
- * 
+ *
  * @param server The MCP server instance
  */
 export function registerPrompts(server: McpServer): void {
   // Log Analysis Prompts
   registerLogAnalysisPrompts(server);
-  
+
   // Monitoring Prompts
   registerMonitoringPrompts(server);
-  
+
   // Spanner Prompts
   registerSpannerPrompts(server);
 }
 
 /**
  * Register log analysis prompts
- * 
+ *
  * @param server The MCP server instance
  */
 function registerLogAnalysisPrompts(server: McpServer): void {
   // Analyse errors in logs
-  server.prompt(
-    'analyse-errors',
+  server.registerPrompt(
+    "analyse-errors",
     {
-      timeframe: z.string().describe('Time range to analyse (e.g., "1h", "24h", "7d")'),
-      severity: z.string().optional().describe('Minimum severity level (e.g., "ERROR", "WARNING")'),
-      service: z.string().optional().describe('Filter by service name')
+      title: "Analyse Errors",
+      description:
+        "Analyse errors in logs over a specified timeframe with optional severity and service filtering",
+      argsSchema: {
+        timeframe: z
+          .string()
+          .describe('Time range to analyse (e.g., "1h", "24h", "7d")') as any,
+        severity: z
+          .string()
+          .optional()
+          .describe('Minimum severity level (e.g., "ERROR", "WARNING")') as any,
+        service: z
+          .string()
+          .optional()
+          .describe("Filter by service name") as any,
+      },
     },
-    async (args, _extra) => {
+    async (args) => {
       const { timeframe, severity, service } = args;
       const filter = [];
-      
+
       if (severity) {
         filter.push(`severity>=${severity}`);
       }
-      
+
       if (service) {
         filter.push(`resource.type="${service}"`);
       }
-      
-      const filterString = filter.length > 0 ? filter.join(' AND ') : '';
-      
+
+      const filterString = filter.length > 0 ? filter.join(" AND ") : "";
+
       return {
         messages: [
           {
-            role: 'user',
+            role: "user",
             content: {
-              type: 'text',
-              text: `Analyse the following logs from the past ${timeframe} and identify error patterns, their frequency, and potential root causes:`
-            }
+              type: "text",
+              text: `Analyse the following logs from the past ${timeframe} and identify error patterns, their frequency, and potential root causes:`,
+            },
           },
           {
-            role: 'user',
+            role: "user",
             content: {
-              type: 'resource',
+              type: "resource",
               resource: {
-                uri: `logging://entries?timeframe=${timeframe}${filterString ? '&filter=' + encodeURIComponent(filterString) : ''}`,
-                text: '',
-                mimeType: 'text/plain'
-              }
-            }
-          }
-        ]
+                uri: `logging://entries?timeframe=${timeframe}${filterString ? "&filter=" + encodeURIComponent(filterString) : ""}`,
+                text: "",
+                mimeType: "text/plain",
+              },
+            },
+          },
+        ],
       };
-    }
-  );
-  
-  // Trace request through logs
-  server.prompt(
-    'trace-request',
-    {
-      traceId: z.string().describe('Trace ID to follow through logs'),
-      timeframe: z.string().optional().describe('Time range to search (e.g., "1h", "24h")')
     },
-    async (args, _extra) => {
-      const { traceId, timeframe = '1h' } = args;
+  );
+
+  // Trace request through logs
+  server.registerPrompt(
+    "trace-request",
+    {
+      title: "Trace Request",
+      description: "Trace a specific request through logs using trace ID",
+      argsSchema: {
+        traceId: z.string().describe("Trace ID to follow through logs") as any,
+        timeframe: z
+          .string()
+          .optional()
+          .describe('Time range to search (e.g., "1h", "24h")') as any,
+      },
+    },
+    async (args) => {
+      const { traceId, timeframe = "1h" } = args;
       return {
         messages: [
           {
-            role: 'user',
+            role: "user",
             content: {
-              type: 'text',
-              text: `Trace the following request through our services. Analyse the flow, identify any errors or performance issues, and summarise the request lifecycle:`
-            }
+              type: "text",
+              text: `Trace the following request through our services. Analyse the flow, identify any errors or performance issues, and summarise the request lifecycle:`,
+            },
           },
           {
-            role: 'user',
+            role: "user",
             content: {
-              type: 'resource',
+              type: "resource",
               resource: {
-                uri: `logging://entries?filter=${encodeURIComponent(`trace="${traceId}"`)}${timeframe ? '&timeframe=' + timeframe : ''}`,
-                text: '',
-                mimeType: 'text/plain'
-              }
-            }
-          }
-        ]
+                uri: `logging://entries?timeframe=${timeframe}&filter=${encodeURIComponent(`trace="${traceId}"`)}`,
+                text: "",
+                mimeType: "text/plain",
+              },
+            },
+          },
+        ],
       };
-    }
+    },
   );
 }
 
 /**
  * Register monitoring prompts
- * 
+ *
  * @param server The MCP server instance
  */
 function registerMonitoringPrompts(server: McpServer): void {
   // Performance overview
-  server.prompt(
-    'performance-overview',
+  server.registerPrompt(
+    "performance-overview",
     {
-      timeframe: z.string().describe('Time range to analyse (e.g., "1h", "24h", "7d")'),
-      service: z.string().optional().describe('Filter by service name')
+      title: "Performance Overview",
+      description:
+        "Get a performance overview for services over a specified timeframe",
+      argsSchema: {
+        timeframe: z
+          .string()
+          .describe('Time range to analyse (e.g., "1h", "24h", "7d")') as any,
+        service: z
+          .string()
+          .optional()
+          .describe("Filter by service name") as any,
+      },
     },
-    async (args, _extra) => {
+    async (args) => {
       const { timeframe, service } = args;
-      const filter = service ? `resource.type="${service}"` : '';
-      
+      const filter = service ? `resource.type="${service}"` : "";
+
       return {
         messages: [
           {
-            role: 'user',
+            role: "user",
             content: {
-              type: 'text',
-              text: `Provide a performance overview for the past ${timeframe}. Analyse CPU usage, memory usage, and request latency. Identify any anomalies or performance issues:`
-            }
+              type: "text",
+              text: `Provide a comprehensive performance overview for the past ${timeframe}. Include key metrics like response times, error rates, throughput, and resource utilisation:`,
+            },
           },
           {
-            role: 'user',
+            role: "user",
             content: {
-              type: 'resource',
+              type: "resource",
               resource: {
-                uri: `monitoring://timeseries?metric=compute.googleapis.com/instance/cpu/utilization&timeframe=${timeframe}${filter ? '&filter=' + encodeURIComponent(filter) : ''}`,
-                text: '',
-                mimeType: 'text/plain'
-              }
-            }
+                uri: `monitoring://metrics?timeframe=${timeframe}${filter ? "&filter=" + encodeURIComponent(filter) : ""}`,
+                text: "",
+                mimeType: "application/json",
+              },
+            },
           },
-          {
-            role: 'user',
-            content: {
-              type: 'resource',
-              resource: {
-                uri: `monitoring://timeseries?metric=compute.googleapis.com/instance/memory/percent_used&timeframe=${timeframe}${filter ? '&filter=' + encodeURIComponent(filter) : ''}`,
-                text: '',
-                mimeType: 'text/plain'
-              }
-            }
-          }
-        ]
+        ],
       };
-    }
-  );
-  
-  // Alert investigation
-  server.prompt(
-    'alert-investigation',
-    {
-      alertId: z.string().describe('Alert ID to investigate'),
-      timeframe: z.string().optional().describe('Time window around alert (e.g., "30m", "1h")')
     },
-    async (args, _extra) => {
-      const { alertId, timeframe = '30m' } = args;
+  );
+
+  // Alert investigation
+  server.registerPrompt(
+    "alert-investigation",
+    {
+      title: "Alert Investigation",
+      description:
+        "Investigate a specific alert and analyse related metrics and logs",
+      argsSchema: {
+        alertId: z.string().describe("Alert ID to investigate") as any,
+        timeframe: z
+          .string()
+          .optional()
+          .describe('Time window around alert (e.g., "30m", "1h")') as any,
+      },
+    },
+    async (args) => {
+      const { alertId, timeframe = "30m" } = args;
       return {
         messages: [
           {
-            role: 'user',
+            role: "user",
             content: {
-              type: 'text',
-              text: `Investigate alert ${alertId}. Analyse the metrics around the alert time, identify potential causes, and suggest remediation steps:`
-            }
+              type: "text",
+              text: `Investigate the following alert and provide analysis of what caused it, its impact, and recommended actions:`,
+            },
           },
           {
-            role: 'user',
+            role: "user",
             content: {
-              type: 'resource',
+              type: "resource",
               resource: {
-                uri: `monitoring://alert?id=${alertId}&timeframe=${timeframe}`,
-                text: '',
-                mimeType: 'text/plain'
-              }
-            }
+                uri: `monitoring://alerts/${alertId}?timeframe=${timeframe}`,
+                text: "",
+                mimeType: "application/json",
+              },
+            },
           },
           {
-            role: 'user',
+            role: "user",
             content: {
-              type: 'resource',
+              type: "resource",
               resource: {
-                uri: `logging://entries?timeframe=${timeframe}&filter=${encodeURIComponent('severity>=WARNING')}`,
-                text: '',
-                mimeType: 'text/plain'
-              }
-            }
-          }
-        ]
+                uri: `logging://entries?timeframe=${timeframe}&filter=${encodeURIComponent(`jsonPayload.alertId="${alertId}"`)}`,
+                text: "",
+                mimeType: "text/plain",
+              },
+            },
+          },
+        ],
       };
-    }
+    },
   );
 }
 
 /**
  * Register Spanner prompts
- * 
+ *
  * @param server The MCP server instance
  */
 function registerSpannerPrompts(server: McpServer): void {
   // Schema explanation
-  server.prompt(
-    'schema-explanation',
+  server.registerPrompt(
+    "schema-explanation",
     {
-      instanceId: z.string().describe('Spanner instance ID'),
-      databaseId: z.string().describe('Spanner database ID')
+      title: "Schema Explanation",
+      description:
+        "Get a comprehensive overview of a Cloud Spanner database schema",
+      argsSchema: {
+        instanceId: z.string().describe("Spanner instance ID") as any,
+        databaseId: z.string().describe("Spanner database ID") as any,
+      },
     },
-    async (args, _extra) => {
+    async (args) => {
       const { instanceId, databaseId } = args;
       return {
         messages: [
           {
-            role: 'user',
+            role: "user",
             content: {
-              type: 'text',
-              text: `Explain the database schema for this Spanner database. Describe the tables, their relationships, primary and foreign keys, and the overall data model design:`
-            }
+              type: "text",
+              text: `Explain the database schema, including table relationships, key constraints, and design patterns used:`,
+            },
           },
           {
-            role: 'user',
+            role: "user",
             content: {
-              type: 'resource',
+              type: "resource",
               resource: {
-                uri: `spanner://schema?instanceId=${instanceId}&databaseId=${databaseId}`,
-                text: '',
-                mimeType: 'text/plain'
-              }
-            }
-          }
-        ]
+                uri: `spanner://${instanceId}/${databaseId}/schema`,
+                text: "",
+                mimeType: "application/json",
+              },
+            },
+          },
+        ],
       };
-    }
-  );
-  
-  // Query optimization
-  server.prompt(
-    'query-optimization',
-    {
-      instanceId: z.string().describe('Spanner instance ID'),
-      databaseId: z.string().describe('Spanner database ID'),
-      query: z.string().describe('SQL query to optimize')
     },
-    async (args, _extra) => {
+  );
+
+  // Query optimisation
+  server.registerPrompt(
+    "query-optimisation",
+    {
+      title: "Query Optimisation",
+      description:
+        "Analyse and provide optimisation suggestions for a Cloud Spanner SQL query",
+      argsSchema: {
+        instanceId: z.string().describe("Spanner instance ID") as any,
+        databaseId: z.string().describe("Spanner database ID") as any,
+        query: z.string().describe("SQL query to optimise") as any,
+      },
+    },
+    async (args) => {
       const { instanceId, databaseId, query } = args;
       return {
         messages: [
           {
-            role: 'user',
+            role: "user",
             content: {
-              type: 'text',
-              text: `Analyse and optimise this SQL query for Google Cloud Spanner. Consider performance, best practices, and potential improvements:\n\n\`\`\`sql\n${query}\n\`\`\``
-            }
+              type: "text",
+              text: `Analyse the following SQL query and provide optimisation recommendations, including index suggestions, query restructuring, and performance improvements:`,
+            },
           },
           {
-            role: 'user',
+            role: "user",
             content: {
-              type: 'resource',
+              type: "text",
+              text: `Query to optimise:\n\`\`\`sql\n${query}\n\`\`\``,
+            },
+          },
+          {
+            role: "user",
+            content: {
+              type: "resource",
               resource: {
-                uri: `spanner://schema?instanceId=${instanceId}&databaseId=${databaseId}`,
-                text: '',
-                mimeType: 'text/plain'
-              }
-            }
-          }
-        ]
+                uri: `spanner://${instanceId}/${databaseId}/schema`,
+                text: "",
+                mimeType: "application/json",
+              },
+            },
+          },
+        ],
       };
-    }
-  );
-  
-  // Data exploration
-  server.prompt(
-    'data-exploration',
-    {
-      instanceId: z.string().describe('Spanner instance ID'),
-      databaseId: z.string().describe('Spanner database ID'),
-      tableName: z.string().describe('Table to explore')
     },
-    async (args, _extra) => {
+  );
+
+  // Data exploration
+  server.registerPrompt(
+    "data-exploration",
+    {
+      title: "Data Exploration",
+      description:
+        "Analyse a Cloud Spanner table schema, performance, and data patterns",
+      argsSchema: {
+        instanceId: z.string().describe("Spanner instance ID") as any,
+        databaseId: z.string().describe("Spanner database ID") as any,
+        tableName: z.string().describe("Table to explore") as any,
+      },
+    },
+    async (args) => {
       const { instanceId, databaseId, tableName } = args;
       return {
         messages: [
           {
-            role: 'user',
+            role: "user",
             content: {
-              type: 'text',
-              text: `Explore the data in the ${tableName} table. Analyse the sample data, identify patterns, data distributions, and provide insights about the data:`
-            }
+              type: "text",
+              text: `Provide a comprehensive analysis of the ${tableName} table, including schema details, data patterns, performance characteristics, and suggestions for improvement:`,
+            },
           },
           {
-            role: 'user',
+            role: "user",
             content: {
-              type: 'resource',
+              type: "resource",
               resource: {
-                uri: `spanner://table?instanceId=${instanceId}&databaseId=${databaseId}&tableName=${tableName}`,
-                text: '',
-                mimeType: 'text/plain'
-              }
-            }
-          }
-        ]
+                uri: `spanner://${instanceId}/${databaseId}/tables/${tableName}`,
+                text: "",
+                mimeType: "application/json",
+              },
+            },
+          },
+        ],
       };
-    }
+    },
   );
 }

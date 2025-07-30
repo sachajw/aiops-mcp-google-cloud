@@ -1,15 +1,16 @@
 /**
  * State Manager for Google Cloud MCP
- * 
+ *
  * This module provides a central state management system for the application,
  * ensuring consistent access to important state like the current project ID.
  * State is persisted to a file between sessions.
  */
-import { configManager } from './config.js';
-import { EventEmitter } from 'events';
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
+import { configManager } from "./config.js";
+import { EventEmitter } from "events";
+import fs from "fs";
+import path from "path";
+import os from "os";
+import { logger } from "./logger.js";
 
 /**
  * Application state interface
@@ -26,8 +27,8 @@ interface AppState {
 /**
  * Path to the state file
  */
-const STATE_DIR = path.join(os.homedir(), '.google-cloud-mcp');
-const STATE_FILE = path.join(STATE_DIR, 'state.json');
+const STATE_DIR = path.join(os.homedir(), ".google-cloud-mcp");
+const STATE_FILE = path.join(STATE_DIR, "state.json");
 
 /**
  * State manager for the application
@@ -35,7 +36,7 @@ const STATE_FILE = path.join(STATE_DIR, 'state.json');
 class StateManager extends EventEmitter {
   private state: AppState = {
     currentProjectId: null,
-    authInitialized: false
+    authInitialized: false,
   };
 
   // Singleton instance
@@ -68,23 +69,25 @@ class StateManager extends EventEmitter {
       if (!fs.existsSync(STATE_DIR)) {
         fs.mkdirSync(STATE_DIR, { recursive: true });
       }
-      
+
       // Load state from file if it exists
       if (fs.existsSync(STATE_FILE)) {
         try {
-          const stateData = await fs.promises.readFile(STATE_FILE, 'utf-8');
+          const stateData = await fs.promises.readFile(STATE_FILE, "utf-8");
           const loadedState = JSON.parse(stateData);
           this.state = { ...this.state, ...loadedState };
-          console.log(`Loaded state from file: ${JSON.stringify(this.state)}`);
+          logger.debug(`Loaded state from file: ${JSON.stringify(this.state)}`);
         } catch (fileError) {
-          console.error('Error loading state from file:', fileError);
+          logger.warn(
+            `Error loading state from file: ${fileError instanceof Error ? fileError.message : String(fileError)}`,
+          );
           // Continue with default state
         }
       }
-      
+
       // Initialize config manager
       await configManager.initialize();
-      
+
       // If we don't have a project ID from the state file, try to get it from config
       if (!this.state.currentProjectId) {
         const defaultProjectId = configManager.getDefaultProjectId();
@@ -92,18 +95,22 @@ class StateManager extends EventEmitter {
           await this.setCurrentProjectId(defaultProjectId);
         }
       }
-      
+
       // Check environment variable as fallback
       if (!this.state.currentProjectId && process.env.GOOGLE_CLOUD_PROJECT) {
         await this.setCurrentProjectId(process.env.GOOGLE_CLOUD_PROJECT);
       }
 
-      console.log(`State manager initialized with project ID: ${this.state.currentProjectId || 'not set'}`);
+      logger.info(
+        `State manager initialized with project ID: ${this.state.currentProjectId || "not set"}`,
+      );
     } catch (error) {
-      console.error('Failed to initialize state manager:', error);
+      logger.error(
+        `Failed to initialize state manager: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
-  
+
   /**
    * Save the state to disk
    */
@@ -111,22 +118,24 @@ class StateManager extends EventEmitter {
     try {
       // Update the timestamp
       this.state.lastUpdated = Date.now();
-      
+
       // Write to file
       await fs.promises.writeFile(
         STATE_FILE,
         JSON.stringify(this.state, null, 2),
-        'utf-8'
+        "utf-8",
       );
-      console.log(`State saved to file: ${JSON.stringify(this.state)}`);
+      logger.debug(`State saved to file: ${JSON.stringify(this.state)}`);
     } catch (error) {
-      console.error('Failed to save state:', error);
+      logger.error(
+        `Failed to save state: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
   /**
    * Get the current project ID
-   * 
+   *
    * @returns The current project ID or null if not set
    */
   getCurrentProjectId(): string | null {
@@ -135,49 +144,51 @@ class StateManager extends EventEmitter {
 
   /**
    * Set the current project ID
-   * 
+   *
    * @param projectId The project ID to set
    */
   async setCurrentProjectId(projectId: string): Promise<void> {
     if (!projectId) {
-      throw new Error('Project ID cannot be empty');
+      throw new Error("Project ID cannot be empty");
     }
 
     // Update in-memory state
     this.state.currentProjectId = projectId;
-    
+
     // Set in environment variable for immediate use
     process.env.GOOGLE_CLOUD_PROJECT = projectId;
-    
+
     // Update config for persistence
     try {
       await configManager.setDefaultProjectId(projectId);
     } catch (error) {
-      console.error(`Warning: Could not save project ID to config: ${error instanceof Error ? error.message : String(error)}`);
+      logger.warn(
+        `Could not save project ID to config: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
-    
+
     // Save state to file
     await this.saveState();
-    
+
     // Emit change event
-    this.emit('projectIdChanged', projectId);
-    
-    console.log(`Current project ID set to: ${projectId}`);
+    this.emit("projectIdChanged", projectId);
+
+    logger.info(`Current project ID set to: ${projectId}`);
   }
 
   /**
    * Set the auth initialization state
-   * 
+   *
    * @param initialized Whether auth has been initialized
    */
   setAuthInitialized(initialized: boolean): void {
     this.state.authInitialized = initialized;
-    this.emit('authInitialized', initialized);
+    this.emit("authInitialized", initialized);
   }
 
   /**
    * Get the auth initialization state
-   * 
+   *
    * @returns Whether auth has been initialized
    */
   isAuthInitialized(): boolean {

@@ -1,15 +1,17 @@
 /**
  * Logger utility for the Google Cloud MCP server
  */
+import winston from "winston";
+import crypto from "crypto";
 
 /**
  * Log levels
  */
 export enum LogLevel {
-  DEBUG = 'debug',
-  INFO = 'info',
-  WARN = 'warn',
-  ERROR = 'error'
+  DEBUG = "debug",
+  INFO = "info",
+  WARN = "warn",
+  ERROR = "error",
 }
 
 /**
@@ -22,74 +24,179 @@ export interface Logger {
   error(message: string | Error): void;
 }
 
+// Log correlation ID for tracking requests across services
+let correlationId: string = generateCorrelationId();
+
 /**
- * Default logger implementation that writes to stderr
- * to avoid interfering with MCP protocol communication on stdout
+ * Generate a unique correlation ID for log tracing
  */
-class DefaultLogger implements Logger {
-  private readonly logToStderr = (level: string, message: string): void => {
-    try {
-      // Write to stderr to avoid interfering with MCP protocol on stdout
-      // Make sure to flush the output immediately
-      process.stderr.write(`[${new Date().toISOString()}] [${level}] ${message}\n`);
-    } catch (err) {
-      // If stderr writing fails, try to write to a file as last resort
-      try {
-        const fs = require('fs');
-        fs.appendFileSync('mcp-error.log', `[${new Date().toISOString()}] [${level}] ${message}\n`);
-      } catch (fileErr) {
-        // Cannot log anywhere, silently fail
-      }
-    }
-  };
+function generateCorrelationId(): string {
+  return `mcp-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
+}
+
+/**
+ * Enhanced logger implementation using Winston with structured logging
+ * Writes to stderr to avoid interfering with MCP protocol communication on stdout
+ */
+class StructuredLogger implements Logger {
+  private winston: winston.Logger;
+
+  constructor() {
+    const logLevel = process.env.LOG_LEVEL || "info";
+    const isDevelopment = process.env.NODE_ENV !== "production";
+
+    // Create Winston logger with appropriate format
+    this.winston = winston.createLogger({
+      level: logLevel,
+      format: winston.format.combine(
+        winston.format.timestamp({ format: "YYYY-MM-DD HH:mm:ss.SSS" }),
+        winston.format.errors({ stack: true }),
+        isDevelopment
+          ? winston.format.combine(
+              winston.format.colorize(),
+              winston.format.printf(
+                ({
+                  timestamp,
+                  level,
+                  message,
+                  correlationId: cId,
+                  service,
+                  operation,
+                  ...meta
+                }) => {
+                  const corrId = cId || correlationId;
+                  const svc = service || "mcp-server";
+                  const op = operation ? `[${operation}]` : "";
+                  const metaStr =
+                    Object.keys(meta).length > 0
+                      ? ` ${JSON.stringify(meta)}`
+                      : "";
+                  return `[${timestamp}] ${level} [${svc}] ${op} [${corrId}] ${message}${metaStr}`;
+                },
+              ),
+            )
+          : winston.format.json(),
+      ),
+      transports: [
+        new winston.transports.Console({
+          stderrLevels: ["error", "warn", "info", "debug"], // All levels to stderr for MCP compatibility
+        }),
+      ],
+    });
+  }
 
   debug(message: string): void {
-    // Only log debug messages if DEBUG environment variable is set
-    if (process.env.DEBUG) {
-      this.logToStderr('debug', message);
-    }
+    this.winston.debug(message, { correlationId });
   }
 
   info(message: string): void {
-    this.logToStderr('info', message);
+    this.winston.info(message, { correlationId });
   }
 
   warn(message: string): void {
-    this.logToStderr('warn', message);
+    this.winston.warn(message, { correlationId });
   }
 
   error(message: string | Error): void {
     if (message instanceof Error) {
-      this.logToStderr('error', `${message.message}\n${message.stack}`);
+      this.winston.error(message.message, {
+        correlationId,
+        error: {
+          name: message.name,
+          message: message.message,
+          stack: message.stack,
+        },
+      });
     } else {
-      this.logToStderr('error', message);
+      this.winston.error(message, { correlationId });
     }
+  }
+
+  /**
+   * Set correlation ID for current operation
+   */
+  setCorrelationId(id: string): void {
+    correlationId = id;
+  }
+
+  /**
+   * Get current correlation ID
+   */
+  getCorrelationId(): string {
+    return correlationId;
+  }
+
+  /**
+   * Generate new correlation ID
+   */
+  newCorrelationId(): string {
+    correlationId = generateCorrelationId();
+    return correlationId;
+  }
+
+  /**
+   * Log with additional context
+   */
+  logWithContext(
+    level: string,
+    message: string,
+    context: Record<string, any> = {},
+  ): void {
+    this.winston.log(level, message, { correlationId, ...context });
+  }
+
+  /**
+   * Log operation start
+   */
+  startOperation(operation: string, context: Record<string, any> = {}): string {
+    const opCorrelationId = generateCorrelationId();
+    this.winston.info(`Starting operation: ${operation}`, {
+      correlationId: opCorrelationId,
+      operation,
+      operationPhase: "start",
+      ...context,
+    });
+    return opCorrelationId;
+  }
+
+  /**
+   * Log operation completion
+   */
+  endOperation(
+    operation: string,
+    startTime: number,
+    opCorrelationId?: string,
+    context: Record<string, any> = {},
+  ): void {
+    const duration = Date.now() - startTime;
+    this.winston.info(`Completed operation: ${operation}`, {
+      correlationId: opCorrelationId || correlationId,
+      operation,
+      operationPhase: "end",
+      duration,
+      ...context,
+    });
+  }
+
+  /**
+   * Log audit events
+   */
+  audit(
+    action: string,
+    resource: string,
+    context: Record<string, any> = {},
+  ): void {
+    this.winston.info(`Audit: ${action}`, {
+      correlationId,
+      audit: {
+        action,
+        resource,
+        timestamp: new Date().toISOString(),
+      },
+      ...context,
+    });
   }
 }
 
-// Export a singleton instance of the logger
-export const logger = new DefaultLogger();
-
-// Ensure no console.log calls interfere with MCP protocol
-// Override console methods to use our logger
-const originalConsoleLog = console.log;
-const originalConsoleInfo = console.info;
-const originalConsoleWarn = console.warn;
-const originalConsoleError = console.error;
-
-// Replace console methods with our logger
-console.log = (...args: any[]): void => {
-  logger.debug(args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' '));
-};
-
-console.info = (...args: any[]): void => {
-  logger.info(args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' '));
-};
-
-console.warn = (...args: any[]): void => {
-  logger.warn(args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' '));
-};
-
-console.error = (...args: any[]): void => {
-  logger.error(args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' '));
-};
+// Export a singleton instance of the enhanced logger
+export const logger = new StructuredLogger();
