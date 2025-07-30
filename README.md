@@ -14,6 +14,7 @@ Supported Google Cloud services:
 - [x] [Identity and Access Management (IAM)](https://cloud.google.com/iam)
 - [x] [Logging](https://cloud.google.com/logging)
 - [x] [Monitoring](https://cloud.google.com/monitoring)
+- [x] [Profiler](https://cloud.google.com/profiler)
 - [x] [Spanner](https://cloud.google.com/spanner)
 
 ### Error Reporting
@@ -59,6 +60,17 @@ Retrieve and analyse metrics from Google Cloud Monitoring:
 - Query metrics with custom filters
 - Visualise metric data over time
 - List available metric types
+
+### Profiler
+
+Analyse application performance with Google Cloud Profiler:
+
+- List and analyse profiles with filtering by type (CPU, Heap, Wall, etc.)
+- Perform detailed performance analysis with bottleneck identification
+- Compare profile trends over time to track performance changes
+- Generate actionable recommendations for optimisation
+- Support for multiple programming languages (Go, Java, Node.js, Python)
+- Analyse CPU hotspots, memory allocation patterns, and execution timing
 
 ### Trace
 
