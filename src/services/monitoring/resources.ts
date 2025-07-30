@@ -7,10 +7,7 @@ import {
 } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getProjectId } from "../../utils/auth.js";
 import { GcpMcpError } from "../../utils/error.js";
-import {
-  formatTimeSeriesData,
-  getMonitoringClient,
-} from "./types.js";
+import { formatTimeSeriesData, getMonitoringClient } from "./types.js";
 
 /**
  * Registers Google Cloud Monitoring resources with the MCP server

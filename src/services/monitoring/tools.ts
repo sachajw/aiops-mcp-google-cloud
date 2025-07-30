@@ -5,10 +5,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { getProjectId } from "../../utils/auth.js";
 import { GcpMcpError } from "../../utils/error.js";
-import {
-  formatTimeSeriesData,
-  getMonitoringClient,
-} from "./types.js";
+import { formatTimeSeriesData, getMonitoringClient } from "./types.js";
 import { parseRelativeTime } from "../../utils/time.js";
 import { metricsLookup } from "./metrics_lookup.js";
 
