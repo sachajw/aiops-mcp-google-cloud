@@ -65,5 +65,12 @@
   "engines": {
     "node": ">=18.0.0"
   },
-  "packageManager": "pnpm@9.15.4"
+  "packageManager": "pnpm@9.15.4",
+  "pnpm": {
+    "overrides": {
+      "buffer-equal-constant-time": "npm:buffer-equal@^1.0.1",
+      "jwa": "^2.0.1",
+      "jws": "^4.0.0"
+    }
+  }
 }
